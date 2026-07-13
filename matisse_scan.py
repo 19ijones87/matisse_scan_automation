@@ -21,6 +21,8 @@ import os
 MATISSE_HOST = os.environ.get("MATISSE_HOST", "127.0.0.1")
 MATISSE_PORT = 30000
 
+import argparse
+
 def start_scan(sock):
     command = "SCAN:STATUS RUN"
     mc.send_command(sock, command)
@@ -50,8 +52,8 @@ def wait_until_done(sock):
             break
         time.sleep(0.1)
 
-def main():
-    sock = mc.connect_to_matisse(MATISSE_HOST, MATISSE_PORT)
+def main(host):
+    sock = mc.connect_to_matisse(host, MATISSE_PORT)
     try:
         start_scan(sock)
         wait_until_done(sock)
@@ -60,7 +62,10 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--host", default=MATISSE_HOST)
+        args = parser.parse_args()
+        main(args.host)
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
         sys.exit(1)
