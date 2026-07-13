@@ -34,7 +34,10 @@ def connect_to_matisse(host, port, timeout = 1.0):
         raise
 
 def disconnect_from_matisse(sock):
-    pass
+    if sock is None:
+        return
+
+    sock.close()
 
 def send_command(sock, command):
     pass
