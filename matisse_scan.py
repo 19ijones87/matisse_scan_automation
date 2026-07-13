@@ -22,6 +22,12 @@ MATISSE_HOST = os.environ.get("MATISSE_HOST", "127.0.0.1")
 MATISSE_PORT = 30000
 
 import argparse
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s, %(levelname)s, %(message)s", 
+                    handlers=[logging.StreamHandler(), logging.FileHandler("matisse_scan.log")])
+logger = logging.getLogger(__name__)
+
 
 def start_scan(sock):
     command = "SCAN:STATUS RUN"
@@ -30,6 +36,7 @@ def start_scan(sock):
     respond = mc.receive_response(sock)
     if respond != "OK":
         raise RuntimeError("Expected 'OK' but got: {}".format(respond))
+    logger.info("Scan started successfully!")
 
 
 def get_status(sock):
@@ -46,19 +53,29 @@ def get_status(sock):
 
 
 def wait_until_done(sock):
+    start_time = time.time()
     while True:
         current_status = get_status(sock)
         if current_status == "STOP":
             break
         time.sleep(0.1)
+    end_time = time.time()
+    duration = end_time - start_time
+
+    logger.info(f"Scan completed in {duration:.1f}s")
+
 
 def main(host):
+    logger.info(f"Connecting to Matisse at {host}:{MATISSE_PORT}")
     sock = mc.connect_to_matisse(host, MATISSE_PORT)
+    logger.info("Connection established")
     try:
         start_scan(sock)
         wait_until_done(sock)
     finally:
         mc.disconnect_from_matisse(sock)
+        logger.info(f"Disconnected from {host}")
+        
 
 if __name__ == "__main__":
     try:
@@ -67,5 +84,5 @@ if __name__ == "__main__":
         args = parser.parse_args()
         main(args.host)
     except Exception as e:
-        print(f"{type(e).__name__}: {e}")
+        logger.error(f"{type(e).__name__}: {e}")
         sys.exit(1)
