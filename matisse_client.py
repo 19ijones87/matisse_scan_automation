@@ -52,8 +52,20 @@ def send_command(sock, command):
     command_packet_bytes += (command_len_bytes + command_bytes)
 
     sock.sendall(command_packet_bytes)
+    
+
+
 def receive_exact_bytes(sock, n):
-    pass
+    response_buffer = b""
+    while (n > len(response_buffer)):
+        
+        data = sock.recv(n-len(response_buffer))
+        if not data:
+            raise ConnectionError(" {} bytes expected, but got {} bytes".format(n, len(response_buffer)))
+        response_buffer += data
+
+    return response_buffer 
+   
 
 def receive_response(sock):
     pass
