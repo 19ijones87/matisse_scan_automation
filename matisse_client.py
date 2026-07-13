@@ -11,11 +11,27 @@ Author: A. Halil Ceylan
         Koç University,Istanbul - LENS, Florence.
 """
 
-import sys
 import socket
 
 def connect_to_matisse(host, port, timeout = 1.0):
-    pass
+    s = socket.socket()
+    s.settimeout(timeout)
+
+    try:
+        s.connect((host, port))
+        return s
+    
+    except socket.gaierror:
+        s.close()
+        raise
+  
+    except ConnectionRefusedError:
+        s.close()
+        raise
+
+    except TimeoutError:
+        s.close()
+        raise
 
 def disconnect_from_matisse(sock):
     pass
