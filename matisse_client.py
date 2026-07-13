@@ -68,4 +68,11 @@ def receive_exact_bytes(sock, n):
    
 
 def receive_response(sock):
-    pass
+    length_prefix = receive_exact_bytes(sock, COMMAND_LENGTH_BYTES)
+    command_length_int = int.from_bytes(length_prefix, "big")
+
+    response_bytes = receive_exact_bytes(sock, command_length_int)
+    response_string = response_bytes.decode('utf-8')
+
+    return response_string
+
