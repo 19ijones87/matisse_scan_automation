@@ -11,10 +11,16 @@ Author: A. Halil Ceylan
 """
 
 import time
-import matisse_client
+import matisse_client as mc
 
 def start_scan(sock):
-    pass
+    command = "SCAN:STATUS RUN"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond != "OK":
+        raise RuntimeError("Expected 'OK' but got: {}".format(respond))
+
 
 def get_status(sock):
     pass
