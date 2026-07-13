@@ -10,8 +10,16 @@ Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
 """
 
+import sys
 import time
 import matisse_client as mc
+import os
+# MATISSE_HOST can be set via an environment variable (e.g. running
+# `export MATISSE_HOST=<lab-computer-ip>` in the terminal before starting
+# this script) when connecting from the lab computer, so the real IP
+# is never committed. Defaults to localhost if not set.
+MATISSE_HOST = os.environ.get("MATISSE_HOST", "127.0.0.1")
+MATISSE_PORT = 30000
 
 def start_scan(sock):
     command = "SCAN:STATUS RUN"
@@ -36,7 +44,23 @@ def get_status(sock):
 
 
 def wait_until_done(sock):
-    pass
+    while True:
+        current_status = get_status(sock)
+        if current_status == "STOP":
+            break
+        time.sleep(0.1)
 
 def main():
-    pass
+    sock = mc.connect_to_matisse(MATISSE_HOST, MATISSE_PORT)
+    try:
+        start_scan(sock)
+        wait_until_done(sock)
+    finally:
+        mc.disconnect_from_matisse(sock)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"{type(e).__name__}: {e}")
+        sys.exit(1)
