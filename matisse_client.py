@@ -11,5 +11,20 @@ Author: A. Halil Ceylan
         Koç University,Istanbul - LENS, Florence.
 """
 
+import sys
+import socket
+
 def connect_to_matisse(host, port, timeout = 1.0):
+    pass
+
+def disconnect_from_matisse(sock):
+    pass
+
+def send_command(sock, command):
+    pass
+
+def receive_exact_bytes(sock, n):
+    pass
+
+def receive_response(sock):
     pass
