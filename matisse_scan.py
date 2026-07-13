@@ -23,11 +23,20 @@ def start_scan(sock):
 
 
 def get_status(sock):
-    pass
+    command = "SCAN:STATUS?"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    respond_splitted_list = respond.split(" ")
+    status_value = respond_splitted_list[-1]
+
+    if status_value != "RUN" and status_value != "STOP":
+        raise RuntimeError(f"Expected 'RUN' or 'STOP' but got: {status_value}")
+    return status_value
+
 
 def wait_until_done(sock):
     pass
-
 
 def main():
     pass
