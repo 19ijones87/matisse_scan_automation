@@ -24,7 +24,8 @@ MATISSE_PORT = 30000
 import argparse
 import logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s, %(levelname)s, %(message)s", 
+#!!!level=logging.DEBUG
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s, %(levelname)s, %(message)s", 
                     handlers=[logging.StreamHandler(), logging.FileHandler("matisse_scan.log")])
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,8 @@ def get_status(sock):
     mc.send_command(sock, command)
 
     respond = mc.receive_response(sock)
-    respond_splitted_list = respond.split(" ")
+    logger.debug(f"Raw response: {respond!r}") #!!!
+    respond_splitted_list = respond.split()
     status_value = respond_splitted_list[-1]
 
     if status_value != "RUN" and status_value != "STOP":
