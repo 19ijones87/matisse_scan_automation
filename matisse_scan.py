@@ -21,9 +21,15 @@ import os
 MATISSE_HOST = os.environ.get("MATISSE_HOST", "127.0.0.1")
 MATISSE_PORT = 30000
 
+LABSERVER_HOST = os.environ.get("LABSERVER_HOST", "127.0.0.1")
+LABSERVER_PORT = 47123
+LABSERVER_CLIENT_ID = "WLM&Matisse"
+
+
 import argparse
 import logging
 import wavemeter_client
+import labserver_client
 
 #!!!level=logging.DEBUG
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s, %(levelname)s, %(message)s", 
@@ -77,27 +83,44 @@ def wait_until_done(sock):
 
     mean, span = wavemeter_client.calculate_statistics(frequencies)
     logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
+    return mean, span
 
+def upload_results_to_labServer(sock, mean, span):
+    image_id = labserver_client.get_image_id(sock)
 
+    mean_key = "TiSaMeanFreq" + str(image_id)
+    span_key = "TiSaSpanFreq" + str(image_id)
 
-def main(host):
-    logger.info(f"Connecting to Matisse at {host}:{MATISSE_PORT}")
-    sock = mc.connect_to_matisse(host, MATISSE_PORT)
+    labserver_client.upload_data(sock, mean_key, mean)
+    labserver_client.upload_data(sock, span_key, span)
+
+    
+
+def main(matisse_host, labserver_host):
+    logger.info(f"Connecting to Matisse at {matisse_host}:{MATISSE_PORT}")
+    sock = mc.connect_to_matisse(matisse_host, MATISSE_PORT)
     logger.info("Connection established")
+
+    sock_labServer = None
     try:
         start_scan(sock)
-        wait_until_done(sock)
+        mean, span = wait_until_done(sock)
+        sock_labServer = labserver_client.connect_to_labserver(LABSERVER_CLIENT_ID, labserver_host, LABSERVER_PORT)
+
+        upload_results_to_labServer(sock_labServer, mean, span)
     finally:
         mc.disconnect_from_matisse(sock)
-        logger.info(f"Disconnected from {host}")
+        labserver_client.disconnect_from_labserver(sock_labServer)
+        logger.info(f"Disconnected from {matisse_host}")
         
 
 if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser()
-        parser.add_argument("--host", default=MATISSE_HOST)
+        parser.add_argument("--matisse-host", default=MATISSE_HOST)
+        parser.add_argument("--labserver-host", default=LABSERVER_HOST)
         args = parser.parse_args()
-        main(args.host)
+        main(args.matisse_host, args.labserver_host)
     except Exception as e:
         logger.error(f"{type(e).__name__}: {e}")
         sys.exit(1)
