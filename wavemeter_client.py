@@ -1,3 +1,17 @@
+"""
+wavemeter_client.py
+
+Reads laser frequency from a HighFinesse wavemeter, via the official
+wlmData.dll wrapper (wlmData.py / wlmConst.py). Windows-only, since it
+loads a Windows DLL through ctypes.WinDLL -- must be run on the TiSa PC,
+not on a development machine like macOS/Linux.
+
+Author: A. Halil Ceylan
+        Koç University, Istanbul - LENS, Florence
+
+Last updated: 2026-07-17
+"""
+
 import wlmConst
 import wlmData
 
