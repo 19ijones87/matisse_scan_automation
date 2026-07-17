@@ -1,3 +1,24 @@
+"""
+labserver_client.py
+
+TCP/IP client for the lab's shared LabServer (see LabServerDef.py for the
+protocol definition). Used to look up the current experimental image ID
+and to upload data (e.g. mean/span laser frequency) tagged under that
+image, so other lab programs (e.g. siscam) can associate it with the
+correct image.
+
+Protocol notes:
+- Every command starts with a mandatory client ID handshake.
+- Reading a value of unknown length is a two-step process: SERVER_NUM
+  first asks how many bytes the value is, then SERVER_GET requests that
+  many bytes. Both can return SERVER_NACK if the key does not exist.
+
+Author: A. Halil Ceylan
+        Koç University, Istanbul - LENS, Florence
+
+Last updated: 2026-07-17
+"""
+
 import socket
 import LabServerDef
 

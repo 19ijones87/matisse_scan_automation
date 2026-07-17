@@ -22,3 +22,4 @@ def calculate_statistics(frequencies):
     span = max(frequencies) - min(frequencies)
 
     return avg,span
+

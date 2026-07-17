@@ -2,12 +2,24 @@
 matisse_scan.py
 
 Runs a full scan cycle on the Sirah Matisse Ti:Sapphire laser via
-Matisse Commander: starts a scan, polls its status until it completes,
-then disconnects. Built on top of the TCP connection and framing logic
-in matisse_client.py.
+Matisse Commander, and reports the scan's frequency statistics to the
+lab's shared LabServer so they can be associated with the correct
+experimental image.
+
+Main flow:
+1. Connect to Matisse Commander and start a scan (matisse_client.py).
+2. Poll the scan status; while the scan is running, repeatedly read the
+   laser frequency from the HighFinesse wavemeter on channel 7
+   (wavemeter_client.py).
+3. Once the scan stops, compute the mean frequency and frequency span
+   (max - min) from the collected readings.
+4. Connect to LabServer, look up the current image ID, and upload the
+   mean/span values under per-image keys (labserver_client.py).
 
 Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
+
+Last updated: 2026-07-17
 """
 
 import sys
@@ -87,12 +99,14 @@ def wait_until_done(sock):
 
 def upload_results_to_labServer(sock, mean, span):
     image_id = labserver_client.get_image_id(sock)
+    logger.info(f"Image ID: {image_id}")
 
     mean_key = "TiSaMeanFreq" + str(image_id)
     span_key = "TiSaSpanFreq" + str(image_id)
 
     labserver_client.upload_data(sock, mean_key, mean)
     labserver_client.upload_data(sock, span_key, span)
+    logger.info(f"Uploaded mean/span to LabServer under keys: {mean_key}, {span_key}")
 
     
 
