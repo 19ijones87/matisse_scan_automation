@@ -66,3 +66,7 @@ def upload_data(sock, data_key, data):
     else:
         raise RuntimeError("Expected ACK for key '{}', but got {!r}".format(data_key, response))
 
+def disconnect_from_labserver(sock):
+    if sock is None:
+        return
+    sock.close()
