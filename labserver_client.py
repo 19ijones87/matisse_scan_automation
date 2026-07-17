@@ -54,3 +54,15 @@ def get_image_id(sock):
 
     return image_id
 
+
+def upload_data(sock, data_key, data):
+    data_bytes = str(data).encode()
+    sock.sendall(LabServerDef.server_cmd(LabServerDef.SERVER_SET, data_key, len(data_bytes)))
+    sock.sendall(data_bytes)
+
+    response = receive_exact_bytes(sock, 3)
+    if(response.decode() == LabServerDef.SERVER_ACK):
+        return
+    else:
+        raise RuntimeError("Expected ACK for key '{}', but got {!r}".format(data_key, response))
+
