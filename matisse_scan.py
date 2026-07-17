@@ -23,6 +23,7 @@ MATISSE_PORT = 30000
 
 import argparse
 import logging
+import wavemeter_client
 
 #!!!level=logging.DEBUG
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s, %(levelname)s, %(message)s", 
@@ -55,16 +56,28 @@ def get_status(sock):
 
 
 def wait_until_done(sock):
+    frequencies = []
+    error_count = 0
     start_time = time.time()
     while True:
         current_status = get_status(sock)
         if current_status == "STOP":
             break
+        f = wavemeter_client.get_frequency(7)
+        if f is None:
+            error_count += 1
+        else:
+            frequencies.append(f)
         time.sleep(0.1)
     end_time = time.time()
     duration = end_time - start_time
 
     logger.info(f"Scan completed in {duration:.1f}s")
+    logger.info(f"Collected {len(frequencies)} valid readings, {error_count} failed")
+
+    mean, span = wavemeter_client.calculate_statistics(frequencies)
+    logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
+
 
 
 def main(host):
