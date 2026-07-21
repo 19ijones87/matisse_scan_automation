@@ -3,12 +3,13 @@
 A small Python tool that automates the "scan" command on a Sirah Matisse
 Ti:Sapphire laser through the Matisse Commander software, over raw TCP/IP.
 It starts a scan, reads the laser's actual frequency from a HighFinesse
-wavemeter while the scan runs, and once the scan completes, uploads the
-mean frequency and frequency span to the lab's shared LabServer so they
-can be associated with the correct experimental image — no GUI
-interaction needed.
+wavemeter while the scan runs, and tracks the experimental image ID via
+LabServer throughout the scan. Whenever the image ID changes (several
+images can be taken during one scan), it uploads the mean frequency and
+frequency span measured during that image to LabServer, tagged with the
+correct image ID — no GUI interaction needed.
 
-Last updated: 2026-07-17
+Last updated: 2026-07-21
 
 
 ## Requirements
@@ -28,11 +29,12 @@ Last updated: 2026-07-17
   wavemeter (via `wlmData.py`/`wlmConst.py`), and computes mean/span
   statistics from a set of readings. Windows-only.
 - `labserver_client.py` — TCP/IP client for the lab's shared LabServer:
-  connects, looks up the current experimental image ID, and uploads data
-  tagged under that image.
-- `matisse_scan.py` — the main script. Connects to Matisse, starts a
-  scan, reads the wavemeter while the scan runs, computes statistics
-  once it's done, uploads them to LabServer, and disconnects.
+  connects, looks up the current experimental image ID (either with a
+  one-off request, or by subscribing to changes via SERVER_WAIT), and
+  uploads data tagged under an image ID.
+- `matisse_scan.py` — the main script. Connects to Matisse and
+  LabServer, starts a scan, reads the wavemeter while tracking image ID
+  changes, uploads mean/span frequency data per image, and disconnects.
 - `wlmData.py` / `wlmConst.py` — HighFinesse's official Python wrapper
   for `wlmData.dll` (redistributed here under their permissive license).
 - `LabServerDef.py` — the lab's shared LabServer protocol definition.
@@ -86,21 +88,24 @@ appends the same lines to `matisse_scan.log` (this file is not committed
 to the repository, it's created locally on first run):
 
 ```
-2026-07-17 12:00:00,000, INFO, Connecting to Matisse at 127.0.0.1:30000
-2026-07-17 12:00:00,001, INFO, Connection established
-2026-07-17 12:00:00,001, INFO, Scan started successfully!
-2026-07-17 12:00:05,102, INFO, Scan completed in 5.1s
-2026-07-17 12:00:05,102, INFO, Collected 48 valid readings, 2 failed
-2026-07-17 12:00:05,102, INFO, Mean frequency: 384.230123 THz, Span: 0.012400 THz
-2026-07-17 12:00:05,150, INFO, Image ID: 42
-2026-07-17 12:00:05,180, INFO, Uploaded mean/span to LabServer under keys: TiSaMeanFreq42, TiSaSpanFreq42
-2026-07-17 12:00:05,205, INFO, Disconnected from 127.0.0.1
+2026-07-21 12:00:00,000, INFO, Connecting to Matisse at 127.0.0.1:30000
+2026-07-21 12:00:00,001, INFO, Connection established
+2026-07-21 12:00:00,001, INFO, Scan started successfully!
+2026-07-21 12:00:15,050, INFO, Image ID: 100
+2026-07-21 12:00:15,080, INFO, Uploaded mean/span to LabServer under keys: TiSaMeanFreq100, TiSaSpanFreq100
+2026-07-21 12:00:20,102, INFO, Scan completed in 20.1s
+2026-07-21 12:00:20,102, INFO, Collected 33 valid readings, 0 failed
+2026-07-21 12:00:20,102, INFO, Mean frequency: 384.230123 THz, Span: 0.012400 THz
+2026-07-21 12:00:20,150, INFO, Image ID: 101
+2026-07-21 12:00:20,180, INFO, Uploaded mean/span to LabServer under keys: TiSaMeanFreq101, TiSaSpanFreq101
+2026-07-21 12:00:20,205, INFO, Disconnected from 127.0.0.1
 ```
+Note that a "Image ID" / "Uploaded mean/span..." pair can appear more than once per scan — once for every image ID change detected during the scan, plus one final time for whatever data is left when the scan stops.
 
 If something goes wrong (connection refused, unexpected reply, a NACK
 from LabServer, etc.), the script logs the error and exits with a
 non-zero exit code:
 
 ```
-2026-07-17 12:05:11,579, ERROR, RuntimeError: Expected 'OK' but got: !ERROR 1
+2026-07-21 12:05:11,579, ERROR, RuntimeError: Expected 'OK' but got: !ERROR 1
 ```

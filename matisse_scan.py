@@ -7,19 +7,30 @@ lab's shared LabServer so they can be associated with the correct
 experimental image.
 
 Main flow:
-1. Connect to Matisse Commander and start a scan (matisse_client.py).
+1. Connect to Matisse Commander and to LabServer, then subscribe to
+   image ID changes via SERVER_WAIT (labserver_client.py) and start a
+   scan (matisse_client.py).
 2. Poll the scan status; while the scan is running, repeatedly read the
    laser frequency from the HighFinesse wavemeter on channel 7
-   (wavemeter_client.py).
-3. Once the scan stops, compute the mean frequency and frequency span
-   (max - min) from the collected readings.
-4. Connect to LabServer, look up the current image ID, and upload the
-   mean/span values under per-image keys (labserver_client.py).
+   (wavemeter_client.py), and check whether LabServer has pushed a new
+   image ID.
+3. Whenever the image ID changes mid-scan, compute the mean frequency
+   and frequency span (max - min) for the readings collected under the
+   previous image ID, upload them to LabServer under per-image keys,
+   then re-subscribe to further image ID changes.
+4. Once the scan stops, upload the final (still pending) segment the
+   same way, then disconnect from both Matisse and LabServer.
+
+This means several images can be taken during a single scan, and each
+one gets its own mean/span frequency values, tagged with the image ID
+that was current while those readings were taken.
 
 Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
 
-Last updated: 2026-07-17
+Last updated: 2026-07-21 -- added per-image frequency tracking during
+the scan using LabServer's SERVER_WAIT command, instead of only
+sending one mean/span pair for the whole scan.
 """
 
 import sys
@@ -73,7 +84,7 @@ def get_status(sock):
     return status_value
 
 
-def wait_until_done(sock):
+def wait_until_done(sock, sock_labServer, image_id):
     frequencies = []
     error_count = 0
     start_time = time.time()
@@ -86,6 +97,7 @@ def wait_until_done(sock):
             error_count += 1
         else:
             frequencies.append(f)
+        image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies)
         time.sleep(0.1)
     end_time = time.time()
     duration = end_time - start_time
@@ -93,12 +105,12 @@ def wait_until_done(sock):
     logger.info(f"Scan completed in {duration:.1f}s")
     logger.info(f"Collected {len(frequencies)} valid readings, {error_count} failed")
 
-    mean, span = wavemeter_client.calculate_statistics(frequencies)
-    logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
-    return mean, span
+    if len(frequencies) > 0:
+        mean, span = wavemeter_client.calculate_statistics(frequencies)
+        logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
+        upload_results_to_labServer(sock_labServer, image_id, mean, span)
 
-def upload_results_to_labServer(sock, mean, span):
-    image_id = labserver_client.get_image_id(sock)
+def upload_results_to_labServer(sock, image_id, mean, span):
     logger.info(f"Image ID: {image_id}")
 
     mean_key = "TiSaMeanFreq" + str(image_id)
@@ -109,7 +121,6 @@ def upload_results_to_labServer(sock, mean, span):
     logger.info(f"Uploaded mean/span to LabServer under keys: {mean_key}, {span_key}")
 
     
-
 def main(matisse_host, labserver_host):
     logger.info(f"Connecting to Matisse at {matisse_host}:{MATISSE_PORT}")
     sock = mc.connect_to_matisse(matisse_host, MATISSE_PORT)
@@ -117,15 +128,33 @@ def main(matisse_host, labserver_host):
 
     sock_labServer = None
     try:
-        start_scan(sock)
-        mean, span = wait_until_done(sock)
         sock_labServer = labserver_client.connect_to_labserver(LABSERVER_CLIENT_ID, labserver_host, LABSERVER_PORT)
+        labserver_client.send_wait_for_image_id(sock_labServer)
+        image_id = labserver_client.read_image_id(sock_labServer, timeout=None)
 
-        upload_results_to_labServer(sock_labServer, mean, span)
+        start_scan(sock)
+        wait_until_done(sock, sock_labServer, image_id)
     finally:
         mc.disconnect_from_matisse(sock)
         labserver_client.disconnect_from_labserver(sock_labServer)
         logger.info(f"Disconnected from {matisse_host}")
+
+
+def check_image_change(sock_labserver, current_image_id, frequencies):
+    try:
+        new_image_id = labserver_client.read_image_id(sock_labserver, timeout=0)
+    except TimeoutError:
+        return current_image_id, frequencies   # no change
+
+    if new_image_id is None or new_image_id == current_image_id:
+        return current_image_id, frequencies
+
+    if len(frequencies) > 0:
+        mean, span = wavemeter_client.calculate_statistics(frequencies)
+        upload_results_to_labServer(sock_labserver, current_image_id, mean, span)
+
+    labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
+    return new_image_id, []
         
 
 if __name__ == "__main__":
