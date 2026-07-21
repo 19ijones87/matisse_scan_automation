@@ -12,6 +12,7 @@ Author: A. Halil Ceylan
 """
 
 import socket
+import time
 
 COMMAND_LENGTH_BYTES = 4 #in bytes
 
@@ -39,6 +40,8 @@ def disconnect_from_matisse(sock):
     if sock is None:
         return
 
+    send_command(sock, 'Close_Network_Connection')
+    time.sleep(0.3)
     sock.close()
 
 def send_command(sock, command):
