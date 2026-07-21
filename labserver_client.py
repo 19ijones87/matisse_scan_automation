@@ -22,9 +22,7 @@ Protocol notes:
 Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
 
-Last updated: 2026-07-21 -- added send_wait_for_image_id() and
-read_image_id(), for tracking image ID changes via SERVER_WAIT instead
-of repeatedly polling with get_image_id().
+Last updated: 2026-07-21 
 """
 
 import socket

@@ -18,19 +18,25 @@ Main flow:
    and frequency span (max - min) for the readings collected under the
    previous image ID, upload them to LabServer under per-image keys,
    then re-subscribe to further image ID changes.
-4. Once the scan stops, upload the final (still pending) segment the
-   same way, then disconnect from both Matisse and LabServer.
+4. Once the scan stops (or the user presses Ctrl+C), upload the final
+   (still pending) segment the same way, then disconnect from both
+   Matisse and LabServer.
 
 This means several images can be taken during a single scan, and each
 one gets its own mean/span frequency values, tagged with the image ID
 that was current while those readings were taken.
 
+Some Matisse Scan Stop Modes (e.g. "increase voltage, stop at neither
+limit") never stop the scan on their own -- for those, the scan must be
+stopped manually with Ctrl+C, which sends an explicit "SCAN:STATUS
+STOP" command to physically stop the scan (equivalent to clicking
+Scanning off in Matisse Commander) before uploading the final segment.
+
 Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
 
-Last updated: 2026-07-21 -- added per-image frequency tracking during
-the scan using LabServer's SERVER_WAIT command, instead of only
-sending one mean/span pair for the whole scan.
+Last updated: 2026-07-21 -- added stop_scan() and Ctrl+C handling in
+wait_until_done(), for Scan Stop Modes that never stop on their own.
 """
 
 import sys
@@ -70,6 +76,16 @@ def start_scan(sock):
     logger.info("Scan started successfully!")
 
 
+def stop_scan(sock):
+    command = "SCAN:STATUS STOP"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond != "OK":
+        raise RuntimeError("Expected 'OK' but got: {}".format(respond))
+    logger.info("Scan stopped successfully!")
+
+
 def get_status(sock):
     command = "SCAN:STATUS?"
     mc.send_command(sock, command)
@@ -88,17 +104,21 @@ def wait_until_done(sock, sock_labServer, image_id):
     frequencies = []
     error_count = 0
     start_time = time.time()
-    while True:
-        current_status = get_status(sock)
-        if current_status == "STOP":
-            break
-        f = wavemeter_client.get_frequency(7)
-        if f is None:
-            error_count += 1
-        else:
-            frequencies.append(f)
-        image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies)
-        time.sleep(0.1)
+    try:
+        while True:
+            current_status = get_status(sock)
+            if current_status == "STOP":
+                break
+            f = wavemeter_client.get_frequency(7)
+            if f is None:
+                error_count += 1
+            else:
+                frequencies.append(f)
+            image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies)
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        logger.info("Ctrl+C received, stopping scan...")
+        stop_scan(sock)
     end_time = time.time()
     duration = end_time - start_time
 
@@ -143,7 +163,7 @@ def main(matisse_host, labserver_host):
 def check_image_change(sock_labserver, current_image_id, frequencies):
     try:
         new_image_id = labserver_client.read_image_id(sock_labserver, timeout=0)
-    except TimeoutError:
+    except (TimeoutError, BlockingIOError):
         return current_image_id, frequencies   # no change
 
     if new_image_id is None or new_image_id == current_image_id:
