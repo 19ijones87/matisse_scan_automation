@@ -12,11 +12,19 @@ Protocol notes:
 - Reading a value of unknown length is a two-step process: SERVER_NUM
   first asks how many bytes the value is, then SERVER_GET requests that
   many bytes. Both can return SERVER_NACK if the key does not exist.
+- SERVER_WAIT subscribes the connection to changes on a key: it first
+  returns the current value (or SERVER_WAITING if none exists yet),
+  then the server pushes every future change on that key to this same
+  connection, without the client asking again. Sending any other
+  command (e.g. SERVER_SET) cancels the subscription, so it must be
+  re-sent after every upload to keep receiving updates.
 
 Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
 
-Last updated: 2026-07-17
+Last updated: 2026-07-21 -- added send_wait_for_image_id() and
+read_image_id(), for tracking image ID changes via SERVER_WAIT instead
+of repeatedly polling with get_image_id().
 """
 
 import socket
@@ -91,3 +99,16 @@ def disconnect_from_labserver(sock):
     if sock is None:
         return
     sock.close()
+
+def send_wait_for_image_id(sock):
+    sock.sendall(LabServerDef.server_cmd(LabServerDef.SERVER_WAIT, "IMGid", 6))
+
+def read_image_id(sock, timeout=None):
+    sock.settimeout(timeout)
+    first_bytes = receive_exact_bytes(sock, 3)
+
+    if(first_bytes.decode() == LabServerDef.SERVER_WAITING):
+        return None
+
+    first_bytes += receive_exact_bytes(sock, 3)
+    return int(first_bytes.decode())
