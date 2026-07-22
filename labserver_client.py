@@ -82,8 +82,10 @@ def get_image_id(sock):
     return image_id
 
 
-def upload_data(sock, data_key, data):
-    data_bytes = str(data).encode()
+def upload_data(sock, data_key, mean, span, timeout = 10.0):
+    sock.settimeout(timeout)
+    data_bytes = ("*{010.6f}_".format(mean)).encode
+    data_bytes += ("*{010.6f}_".format(span)).encode
     sock.sendall(LabServerDef.server_cmd(LabServerDef.SERVER_SET, data_key, len(data_bytes)))
     sock.sendall(data_bytes)
 

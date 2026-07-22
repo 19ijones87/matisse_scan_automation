@@ -61,7 +61,7 @@ import wavemeter_client
 import labserver_client
 
 #!!!level=logging.DEBUG
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s, %(levelname)s, %(message)s", 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s, %(levelname)s, %(message)s", 
                     handlers=[logging.StreamHandler(), logging.FileHandler("matisse_scan.log")])
 logger = logging.getLogger(__name__)
 
@@ -128,17 +128,20 @@ def wait_until_done(sock, sock_labServer, image_id):
     if len(frequencies) > 0:
         mean, span = wavemeter_client.calculate_statistics(frequencies)
         logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
-        upload_results_to_labServer(sock_labServer, image_id, mean, span)
+        return image_id, mean, span
 
 def upload_results_to_labServer(sock, image_id, mean, span):
+    logger.info("--------------------------------------------------------------------")
     logger.info(f"Image ID: {image_id}")
 
     mean_key = "TiSaMeanFreq" + str(image_id)
     span_key = "TiSaSpanFreq" + str(image_id)
 
     labserver_client.upload_data(sock, mean_key, mean)
-    labserver_client.upload_data(sock, span_key, span)
+    #labserver_client.upload_data(sock, span_key, span)
     logger.info(f"Uploaded mean/span to LabServer under keys: {mean_key}, {span_key}")
+    logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
+    logger.info("--------------------------------------------------------------------")
 
     
 def main(matisse_host, labserver_host):
@@ -153,7 +156,11 @@ def main(matisse_host, labserver_host):
         image_id = labserver_client.read_image_id(sock_labServer, timeout=None)
 
         start_scan(sock)
-        wait_until_done(sock, sock_labServer, image_id)
+        image_id, mean, span = wait_until_done(sock, sock_labServer, image_id)
+
+        if (mean is not None) and (span is not None):
+            upload_results_to_labServer(sock_labServer, mean, span)
+    
     finally:
         mc.disconnect_from_matisse(sock)
         labserver_client.disconnect_from_labserver(sock_labServer)
@@ -166,14 +173,13 @@ def check_image_change(sock_labserver, current_image_id, frequencies):
     except (TimeoutError, BlockingIOError):
         return current_image_id, frequencies   # no change
 
-    if new_image_id is None or new_image_id == current_image_id:
+    if new_image_id is None:
         return current_image_id, frequencies
 
-    if len(frequencies) > 0:
+    elif new_image_id != current_image_id:
         mean, span = wavemeter_client.calculate_statistics(frequencies)
         upload_results_to_labServer(sock_labserver, current_image_id, mean, span)
-
-    labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
+        labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
     return new_image_id, []
         
 
