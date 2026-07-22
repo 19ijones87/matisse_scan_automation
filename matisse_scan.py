@@ -122,14 +122,21 @@ def wait_until_done(sock, sock_labServer, image_id):
     end_time = time.time()
     duration = end_time - start_time
 
+    logger.info("===========================================================================")
+    logger.info("SCAN SUMMARY")
     logger.info(f"Scan completed in {duration:.1f}s")
     logger.info(f"Collected {len(frequencies)} valid readings, {error_count} failed")
 
     if len(frequencies) > 0:
         mean, span = wavemeter_client.calculate_statistics(frequencies)
         logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
+        logger.info("===========================================================================")
+
         return image_id, mean, span
 
+    logger.info("===========================================================================")
+
+    return image_id, None, None
 def upload_results_to_labServer(sock, image_id, mean, span):
     logger.info("--------------------------------------------------------------------")
     logger.info(f"Image ID: {image_id}")
