@@ -100,10 +100,11 @@ def get_status(sock):
     return status_value
 
 
-def wait_until_done(sock, sock_labServer, image_id):
+def wait_until_done(sock, sock_labServer, image_id, image_limit):
     frequencies = []
     error_count = 0
     start_time = time.time()
+    image_counter = 0
     try:
         while True:
             current_status = get_status(sock)
@@ -114,8 +115,15 @@ def wait_until_done(sock, sock_labServer, image_id):
                 error_count += 1
             else:
                 frequencies.append(f)
+            current_image_id = image_id
             image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies)
+            if current_image_id != image_id:
+                image_counter += 1
             time.sleep(0.1)
+            if image_limit <= image_counter:
+                logger.info("Number of images reached!")
+                stop_scan(sock)
+                break
     except KeyboardInterrupt:
         logger.info("Ctrl+C received, stopping scan...")
         stop_scan(sock)
@@ -151,7 +159,7 @@ def upload_results_to_labServer(sock, image_id, mean, span):
     logger.info("--------------------------------------------------------------------")
 
     
-def main(matisse_host, labserver_host):
+def main(matisse_host, labserver_host, image_limit):
     logger.info(f"Connecting to Matisse at {matisse_host}:{MATISSE_PORT}")
     sock = mc.connect_to_matisse(matisse_host, MATISSE_PORT)
     logger.info("Connection established")
@@ -163,10 +171,10 @@ def main(matisse_host, labserver_host):
         image_id = labserver_client.read_image_id(sock_labServer, timeout=None)
 
         start_scan(sock)
-        image_id, mean, span = wait_until_done(sock, sock_labServer, image_id)
+        image_id, mean, span = wait_until_done(sock, sock_labServer, image_id, image_limit)
 
         if (mean is not None) and (span is not None):
-            upload_results_to_labServer(sock_labServer, mean, span)
+            upload_results_to_labServer(sock_labServer, image_id,mean, span)
     
     finally:
         mc.disconnect_from_matisse(sock)
@@ -180,13 +188,14 @@ def check_image_change(sock_labserver, current_image_id, frequencies):
     except (TimeoutError, BlockingIOError):
         return current_image_id, frequencies   # no change
 
-    if new_image_id is None:
+    if new_image_id is None or new_image_id == current_image_id:
         return current_image_id, frequencies
 
     elif new_image_id != current_image_id:
-        mean, span = wavemeter_client.calculate_statistics(frequencies)
-        upload_results_to_labServer(sock_labserver, current_image_id, mean, span)
-        labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
+        if len(frequencies) > 0:
+            mean, span = wavemeter_client.calculate_statistics(frequencies)
+            upload_results_to_labServer(sock_labserver, current_image_id, mean, span)
+            labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
     return new_image_id, []
         
 
@@ -196,7 +205,8 @@ if __name__ == "__main__":
         parser.add_argument("--matisse-host", default=MATISSE_HOST)
         parser.add_argument("--labserver-host", default=LABSERVER_HOST)
         args = parser.parse_args()
-        main(args.matisse_host, args.labserver_host)
+        image_limit = int(input("How many images should be taken at this laser setting? "))
+        main(args.matisse_host, args.labserver_host, image_limit)
     except Exception as e:
         logger.error(f"{type(e).__name__}: {e}")
         sys.exit(1)
