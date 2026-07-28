@@ -60,6 +60,7 @@ import logging
 import wavemeter_client
 import labserver_client
 
+
 #!!!level=logging.DEBUG
 logging.basicConfig(level=logging.INFO, format="%(asctime)s, %(levelname)s, %(message)s", 
                     handlers=[logging.StreamHandler(), logging.FileHandler("matisse_scan.log")])
@@ -99,7 +100,6 @@ def get_status(sock):
         raise RuntimeError(f"Expected 'RUN' or 'STOP' but got: {status_value}")
     return status_value
 
-
 def wait_until_done(sock, sock_labServer, image_id, image_limit):
     frequencies = []
     error_count = 0
@@ -119,11 +119,12 @@ def wait_until_done(sock, sock_labServer, image_id, image_limit):
             image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies)
             if current_image_id != image_id:
                 image_counter += 1
-            time.sleep(0.1)
+        
             if image_limit <= image_counter:
                 logger.info("Number of images reached!")
                 stop_scan(sock)
                 break
+            time.sleep(0.1)
     except KeyboardInterrupt:
         logger.info("Ctrl+C received, stopping scan...")
         stop_scan(sock)
