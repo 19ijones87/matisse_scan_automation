@@ -1,3 +1,40 @@
+"""
+thin_etalon_scan.py
+
+Records a thin etalon scan and writes it to a CSV file, so that the
+fringe pattern can be plotted and analysed away from the lab computer.
+
+The script reads the current motor position, scans a symmetric range
+around it, and puts the motor back where it found it. Leaving the motor
+at the end of the scan would be a problem twice over: the wavelength the
+operator had set up would be lost, and because the scan range is derived
+from the current position, every further run would drift another half
+span away.
+
+Each measurement is stored together with the raw readings it came from:
+
+    motor_position, te_dc, dpow_dc
+
+The reflex intensity alone would be enough to locate the fringes, but the
+thin etalon control loop works on the ratio of the two, so the output
+power is recorded as well. It costs one column and makes it possible to
+tell later which of the two signals misbehaved.
+
+The thin etalon lock has to be released before running this. While the PI
+loop is active it pulls the motor back as the scan moves it, and the
+resulting data is meaningless — without any error being raised.
+
+Usage:
+    python thin_etalon_scan.py
+    python thin_etalon_scan.py --matisse-host <lab-computer-ip>
+    python thin_etalon_scan.py --span 4000 --step 20
+
+Author: A. Halil Ceylan
+        Koç University, Istanbul - LENS, Florence
+
+Last updated: 2026-07-28
+"""
+
 import matisse_client as mc
 import matisse_locking as ml
 import os, sys, csv, logging, argparse
