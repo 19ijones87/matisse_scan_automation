@@ -1,3 +1,39 @@
+"""
+matisse_locking.py
+
+Reads and controls the frequency-selective elements of the Matisse over
+the Matisse Commander TCP interface, using the low-level framing from
+matisse_client.py.
+
+The module covers three groups of operations:
+
+- Queries on the scan piezo and the piezo etalon (scan limits, scan mode,
+  scan device, current piezo position), together with a routine that
+  returns both piezos to the position a scan is expected to start from.
+- Queries on the thin etalon: the motor position and its upper bound, the
+  motor controller status word, the intensity of the etalon reflex, and
+  the total output power of the laser.
+- Driving the thin etalon motor and scanning it across a range, which is
+  the software equivalent of the Thin Etalon > Scan window in Matisse
+  Commander. That window cannot be reached over TCP, so the scan is
+  rebuilt here: the motor is stepped through the range and both diodes
+  are read once the motor has come to rest at each step.
+
+Together these form the groundwork for automating the locking procedure
+that is normally carried out by hand in the GUI. Before a scan can be
+started in a new frequency window, the piezos have to be brought back to
+a known starting position, and the thin and piezo etalons have to be
+re-locked to the mode selected by the birefringent filter.
+
+Positions of the scan piezo are given in the [0, 0.7] interval used by
+Matisse Commander; the piezo etalon baseline is in [-1, 1]. Thin etalon
+motor positions are integers bounded by MOTTE:MAX?.
+
+Author: A. Halil Ceylan
+        Koç University, Istanbul - LENS, Florence
+
+Last updated: 2026-07-28
+"""
 
 import time
 import logging
