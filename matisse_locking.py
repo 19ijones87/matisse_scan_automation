@@ -257,6 +257,10 @@ def wait_for_motor(sock, timeout=5.0):
 
 
 def scan_thin_etalon(sock, start, stop, step, averages=1):
+    max_position = get_thin_etalon_max(sock)
+    if start < 0 or stop > max_position:
+        raise RuntimeError(
+            f"Scan range [{start}, {stop}] is outside the motor range [0, {max_position}]")
 
     samples = []
 
@@ -275,3 +279,43 @@ def scan_thin_etalon(sock, start, stop, step, averages=1):
 
     return samples
 
+
+def unlock_thin_etalon(sock):
+    command = "TE:CNTRSTA STOP"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    logger.debug(f"Raw response to {command}: {respond!r}")
+    if respond != "OK":
+        raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
+
+    logger.info("Thin etalon lock released")
+
+def get_thin_etalon_lock_status(sock):
+    command = "TE:CNTRSTA?"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond.startswith("!ERROR"):
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
+
+    respond_splitted_list = respond.split()
+    lock_status = respond_splitted_list[-1]
+
+    if lock_status not in ("RUN", "STOP"):
+        raise RuntimeError(f"Expected 'RUN' or 'STOP' but got: {lock_status}")
+    return lock_status
+
+def get_control_setpoint(sock):
+    command = "TE:CNTRSP?"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond.startswith("!ERROR"):
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
+
+    respond_splitted_list = respond.split()
+    control_setpoint = float(respond_splitted_list[-1])
+    return control_setpoint
