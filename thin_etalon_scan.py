@@ -1,38 +1,34 @@
 """
 thin_etalon_scan.py
 
-Records a thin etalon scan and writes it to a CSV file, so that the
-fringe pattern can be plotted and analysed away from the lab computer.
+Records a thin etalon scan and writes it to a CSV file.
 
-The script reads the current motor position, scans a symmetric range
-around it, and puts the motor back where it found it. Leaving the motor
-at the end of the scan would be a problem twice over: the wavelength the
-operator had set up would be lost, and because the scan range is derived
-from the current position, every further run would drift another half
-span away.
+Matisse Commander has a Thin Etalon > Scan window that draws this curve on
+screen, but it cannot be reached over TCP and it offers no way to export the
+numbers. The scan is therefore rebuilt here: the motor is stepped across a
+range around its current position, and the etalon reflex and the total
+output power are read once the motor has come to rest at each step.
 
-Each measurement is stored together with the raw readings it came from:
+The scan is centred on wherever the motor happens to be, so the operator
+does not have to work out any absolute positions. The motor is driven back
+to its starting position at the end, which leaves the laser as it was found.
 
-    motor_position, te_dc, dpow_dc
+The thin etalon lock has to be released before this is run. With the lock
+closed the controller pulls the motor back after every step and the result
+is a flat line.
 
-The reflex intensity alone would be enough to locate the fringes, but the
-thin etalon control loop works on the ratio of the two, so the output
-power is recorded as well. It costs one column and makes it possible to
-tell later which of the two signals misbehaved.
-
-The thin etalon lock has to be released before running this. While the PI
-loop is active it pulls the motor back as the scan moves it, and the
-resulting data is meaningless — without any error being raised.
+The file it writes has three columns, motor_position, te_dc and dpow_dc, and
+is named after the moment the scan finished. plot_scan.py and plot_all.py
+read these files, and find_minima.py was developed against them.
 
 Usage:
-    python thin_etalon_scan.py
-    python thin_etalon_scan.py --matisse-host <lab-computer-ip>
-    python thin_etalon_scan.py --span 4000 --step 20
+    python thin_etalon_scan.py --matisse-host <ip>
+    python thin_etalon_scan.py --matisse-host <ip> --span 5000 --step 10
 
 Author: A. Halil Ceylan
         Koç University, Istanbul - LENS, Florence
 
-Last updated: 2026-07-28
+Last updated: 2026-08-01
 """
 
 import matisse_client as mc
