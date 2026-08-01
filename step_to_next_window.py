@@ -17,6 +17,9 @@ import find_minima as fm
 MATISSE_HOST = os.environ.get("MATISSE_HOST", "127.0.0.1")
 MATISSE_PORT = 30000
 
+import wavemeter_client
+import frequency_analysis as fa
+
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s, %(levelname)s, %(message)s")
 logger = logging.getLogger(__name__)
@@ -29,12 +32,9 @@ def main(matisse_host, direction, flank, fraction, span, step):
     try:
         lock_status = ml.get_thin_etalon_lock_status(sock)
         start_position = ml.get_thin_etalon_position(sock)
-        setpoint_before = ml.get_control_setpoint(sock)
+        logger.info(f"Thin etalon {lock_status} at motor {start_position}")
 
-        logger.info(f"Thin etalon lock: {lock_status}")
-        logger.info(f"Thin etalon position: {start_position}")
-        logger.info(f"Control setpoint: {setpoint_before:.6f}")
-
+        frequency_before = wavemeter_client.get_frequency(7)
         if lock_status == "RUN":
             ml.unlock_thin_etalon(sock)
 
@@ -55,8 +55,8 @@ def main(matisse_host, direction, flank, fraction, span, step):
 
         logger.info(f"{len(minima_indices)} minima: "
                     f"{[positions[i] for i in minima_indices]}")
-        logger.info(f"{len(maxima_indices)} maxima: "
-                    f"{[positions[i] for i in maxima_indices]}")
+        logger.debug(f"{len(maxima_indices)} maxima: "
+                     f"{[positions[i] for i in maxima_indices]}")
         logger.info(f"Fringe period {period:.0f} steps, window {window_length}")
 
         current_index = fm.current_minimum(positions, minima_indices,
@@ -68,12 +68,15 @@ def main(matisse_host, direction, flank, fraction, span, step):
 
         logger.info(f"Current minima {positions[current_index]}, "
                     f"{direction} neighbour {positions[next_index]}, "
-                    f"lock point {lock_position} ")
+                    f"lock point {lock_position}")
 
         ml.set_thin_etalon_position(sock, lock_position)
         ml.wait_for_motor(sock)
-        logger.info(f"Motor at {ml.get_thin_etalon_position(sock)}")
         ml.lock_thin_etalon(sock, flank)
+
+        frequency_after = wavemeter_client.get_frequency(7)
+        step_ghz = fa.verify_window_step(frequency_before, frequency_after)
+        logger.info(f"Window step {step_ghz:+.2f} GHz")
 
 
 
