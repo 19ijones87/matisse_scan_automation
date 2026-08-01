@@ -319,3 +319,83 @@ def get_control_setpoint(sock):
     respond_splitted_list = respond.split()
     control_setpoint = float(respond_splitted_list[-1])
     return control_setpoint
+
+
+def get_control_proportional(sock):
+    command = "TE:CNTRPROP?"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond.startswith("!ERROR"):
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
+
+    respond_splitted_list = respond.split()
+    pid_proportion = float(respond_splitted_list[-1])
+    return pid_proportion
+
+def get_control_integral(sock):
+    command = "TE:CNTRINT?"
+    mc.send_command(sock, command)
+    
+    respond = mc.receive_response(sock)
+    if respond.startswith("!ERROR"):
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
+    
+    respond_splitted_list = respond.split()
+    pid_integral = float(respond_splitted_list[-1])
+    return pid_integral
+
+def set_control_proportional(sock, v):
+    command = f"TE:CNTRPROP {v:.6e}"
+    mc.send_command(sock, command)
+    
+    respond = mc.receive_response(sock)
+    logger.debug(f"Raw response to {command}: {respond!r}")
+    if respond != "OK":
+        raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
+    
+
+def set_control_integral(sock, v):
+    command = f"TE:CNTRINT {v:.6e}"
+    mc.send_command(sock, command)
+        
+    respond = mc.receive_response(sock)
+    logger.debug(f"Raw response to {command}: {respond!r}")
+    if respond != "OK":
+        raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
+
+def set_flank_orientation(sock, flank):
+    if flank != "left" and flank != "right":
+        raise ValueError("flank must be 'left' or 'right'")
+    else:
+        pid_proportional = get_control_proportional(sock)
+        pid_integral     = get_control_integral(sock)
+        if pid_integral == 0 or pid_proportional == 0:
+            raise RuntimeError("Control gains are zero, the lock would have no feedback")
+        if flank == "left":
+            sign = -1
+        elif flank == "right":
+            sign = +1
+
+        pid_proportional = sign * abs(pid_proportional)
+        pid_integral = sign * abs(pid_integral)
+
+        set_control_proportional(pid_proportional)
+        set_control_integral(pid_integral)
+
+        written_proportional = get_control_proportional(sock)
+        written_integral = get_control_integral(sock)
+        if written_proportional * sign <= 0:
+            raise RuntimeError(
+                f"Expected a {flank} flank sign on TE:CNTRPROP but got: {written_proportional}")
+
+        if written_integral * sign <= 0:
+            raise RuntimeError(
+                f"Expected a {flank} flank sign on TE:CNTRINT but got: {written_integral}")
+        logger.info(f"Flank orientation set to {flank} "
+            f"(proportional {written_proportional:.1f}, "
+            f"integral {written_integral:.1f})")
+
+
