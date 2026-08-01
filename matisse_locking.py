@@ -382,8 +382,8 @@ def set_flank_orientation(sock, flank):
         pid_proportional = sign * abs(pid_proportional)
         pid_integral = sign * abs(pid_integral)
 
-        set_control_proportional(pid_proportional)
-        set_control_integral(pid_integral)
+        set_control_proportional(sock, pid_proportional)
+        set_control_integral(sock, pid_integral)
 
         written_proportional = get_control_proportional(sock)
         written_integral = get_control_integral(sock)
