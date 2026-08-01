@@ -49,6 +49,9 @@ VALID_SCAN_MODES = (1, 2, 4, 8, 16, 32, 64, 128)
 MOTOR_ERROR_BIT = 1 << 7      # 128 -- controller is in an error state
 MOTOR_RUNNING_BIT = 1 << 8    # 256 -- motor is still moving
 
+LOCK_TOLERANCE = 0.05
+LOCK_SETTLE_TIME = 1.0
+
 _thin_etalon_max = None
 
 
@@ -398,4 +401,55 @@ def set_flank_orientation(sock, flank):
             f"(proportional {written_proportional:.1f}, "
             f"integral {written_integral:.1f})")
 
+
+def set_control_setpoint(sock, setpoint):
+    command = f"TE:CNTRSP {setpoint:.6e}"
+    mc.send_command(sock, command)
+            
+    respond = mc.receive_response(sock)
+    logger.debug(f"Raw response to {command}: {respond!r}")
+    if respond != "OK":
+        raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
+
+def get_control_error(sock):
+    command = "TE:CNTRERR?"
+    mc.send_command(sock, command)
+                
+    respond = mc.receive_response(sock)
+    if respond.startswith("!ERROR"):
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
+        
+    respond_splitted_list = respond.split()
+    error = float(respond_splitted_list[-1])
+    return error
+
+def lock_thin_etalon(sock, flank):
+    position = get_thin_etalon_position(sock)
+
+
+    te = get_thin_etalon_dc(sock)
+    dpow = get_diode_power(sock)
+    if dpow <= 0:
+        raise RuntimeError(f"No output power, cannot lock: DPOW:DC = {dpow}")
+    setpoint = te / dpow
+
+    set_control_setpoint(sock, setpoint)
+
+    set_flank_orientation(sock, flank)
+
+    command = "TE:CNTRSTA RUN"
+    mc.send_command(sock, command)
+    respond = mc.receive_response(sock)
+    if respond != "OK":
+        raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
+    
+    time.sleep(LOCK_SETTLE_TIME)
+
+    error = get_control_error(sock)
+    if abs(error) > LOCK_TOLERANCE:
+        raise RuntimeError(f"Lock did not hold: error {error:+.4f} exceeds {LOCK_TOLERANCE}")
+    
+
+    logger.info(f"Thin etalon has locked at motor {position}, "f"setpoint {setpoint:.4f}, error {error:+.4f}")
 
