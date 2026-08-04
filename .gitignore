@@ -8,3 +8,8 @@ venv/
 .DS_Store
 *.log
 LabServerDef.py
+/thin_etalon_scan_*.csv
+/datas/
+/test_locking_layers.py
+/plot_all.py
+/is_sirasi.md
