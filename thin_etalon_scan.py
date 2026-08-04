@@ -32,7 +32,7 @@ Last updated: 2026-08-01
 """
 
 import matisse_client as mc
-import matisse_locking as ml
+import thin_etalon as te
 import os, sys, csv, logging, argparse
 from datetime import datetime
 
@@ -57,15 +57,15 @@ def main(matisse_host, span, step):
     logger.info("Connection established")
 
     try:
-        current_motor_position = ml.get_thin_etalon_position(sock)
+        current_motor_position = te.get_thin_etalon_position(sock)
         start = current_motor_position - span//2
         stop = current_motor_position + span//2
-        samples = ml.scan_thin_etalon(sock, start, stop, step)
+        samples = te.scan_thin_etalon(sock, start, stop, step)
         filename = datetime.now().strftime("thin_etalon_scan_%Y%m%d_%H%M%S.csv")
         save_scan(samples, filename)
         logger.info(f"Saved {len(samples)} samples to {filename}")
-        ml.set_thin_etalon_position(sock, current_motor_position)
-        ml.wait_for_motor(sock)
+        te.set_thin_etalon_position(sock, current_motor_position)
+        te.wait_for_motor(sock)
     finally:
         mc.disconnect_from_matisse(sock)
        

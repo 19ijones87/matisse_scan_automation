@@ -11,7 +11,7 @@ import logging
 import argparse
 
 import matisse_client as mc
-import matisse_locking as ml
+import thin_etalon as te
 import find_minima as fm
 
 MATISSE_HOST = os.environ.get("MATISSE_HOST", "127.0.0.1")
@@ -30,19 +30,19 @@ def main(matisse_host, direction, flank, fraction, span, step):
     logger.info("Connection established")
 
     try:
-        lock_status = ml.get_thin_etalon_lock_status(sock)
-        start_position = ml.get_thin_etalon_position(sock)
+        lock_status = te.get_thin_etalon_lock_status(sock)
+        start_position = te.get_thin_etalon_position(sock)
         logger.info(f"Thin etalon {lock_status} at motor {start_position}")
 
         frequency_before = wavemeter_client.get_frequency(7)
         if lock_status == "RUN":
-            ml.unlock_thin_etalon(sock)
+            te.unlock_thin_etalon(sock)
 
         scan_start = start_position - span // 2
         scan_stop = start_position + span // 2
         logger.info(f"Scanning {scan_start} -> {scan_stop}, step {step}")
 
-        samples = ml.scan_thin_etalon(sock, scan_start, scan_stop, step)
+        samples = te.scan_thin_etalon(sock, scan_start, scan_stop, step)
 
         positions = [row[0] for row in samples]
         te_values = [row[1] for row in samples]
@@ -70,10 +70,11 @@ def main(matisse_host, direction, flank, fraction, span, step):
                     f"{direction} neighbour {positions[next_index]}, "
                     f"lock point {lock_position}")
 
-        ml.set_thin_etalon_position(sock, lock_position)
-        ml.wait_for_motor(sock)
-        ml.lock_thin_etalon(sock, flank)
+        te.set_thin_etalon_position(sock, lock_position)
+        te.wait_for_motor(sock)
 
+        te.lock_thin_etalon(sock, flank)
+ 
         frequency_after = wavemeter_client.get_frequency(7)
         step_ghz = fa.verify_window_step(frequency_before, frequency_after)
         logger.info(f"Window step {step_ghz:+.2f} GHz")
