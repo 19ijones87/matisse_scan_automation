@@ -240,15 +240,17 @@ def set_thin_etalon_position(sock, position):
     
 def wait_for_motor(sock, timeout=5.0):
     start_time = time.time()
+    polls = 0
 
     while True:
         motor_status = get_motor_status(sock)
+        polls += 1
 
         if motor_status & MOTOR_ERROR_BIT:
             raise RuntimeError(f"Thin etalon motor is in an error state, status: {motor_status}")
 
         if not (motor_status & MOTOR_RUNNING_BIT):
-            return
+            return time.time() - start_time, polls
 
         if time.time() - start_time > timeout:
             raise TimeoutError(
@@ -340,7 +342,6 @@ def get_control_proportional(sock):
 def get_control_integral(sock):
     command = "TE:CNTRINT?"
     mc.send_command(sock, command)
-    
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
         raise RuntimeError(f"{command} returned an error: {respond}")
@@ -351,7 +352,7 @@ def get_control_integral(sock):
     return pid_integral
 
 def set_control_proportional(sock, v):
-    command = f"TE:CNTRPROP {v:.6e}"
+    command = f"TE:CNTRPROP {v:.4f}"
     mc.send_command(sock, command)
     
     respond = mc.receive_response(sock)
@@ -361,7 +362,7 @@ def set_control_proportional(sock, v):
     
 
 def set_control_integral(sock, v):
-    command = f"TE:CNTRINT {v:.6e}"
+    command = f"TE:CNTRINT {v:.4f}"
     mc.send_command(sock, command)
         
     respond = mc.receive_response(sock)
@@ -403,7 +404,7 @@ def set_flank_orientation(sock, flank):
 
 
 def set_control_setpoint(sock, setpoint):
-    command = f"TE:CNTRSP {setpoint:.6e}"
+    command = f"TE:CNTRSP {setpoint:.4f}"
     mc.send_command(sock, command)
             
     respond = mc.receive_response(sock)
@@ -411,28 +412,33 @@ def set_control_setpoint(sock, setpoint):
     if respond != "OK":
         raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
 
+
+
 def get_control_error(sock):
-    command = "TE:CNTRERR?"
-    mc.send_command(sock, command)
-                
-    respond = mc.receive_response(sock)
-    if respond.startswith("!ERROR"):
-        raise RuntimeError(f"{command} returned an error: {respond}")
-    logger.debug(f"Raw response to {command}: {respond!r}")
-        
-    respond_splitted_list = respond.split()
-    error = float(respond_splitted_list[-1])
-    return error
-
-def lock_thin_etalon(sock, flank):
-    position = get_thin_etalon_position(sock)
-
-
+    setpoint = get_control_setpoint(sock)
     te = get_thin_etalon_dc(sock)
     dpow = get_diode_power(sock)
+    
+    if dpow <= 0:
+        raise RuntimeError(f"No output power: DPOW:DC = {dpow}")
+    
+    return setpoint - (te / dpow)
+
+def lock_thin_etalon(sock, flank, averages=10):
+    position = get_thin_etalon_position(sock)
+
+    te_total = 0.0
+    dpow_total = 0.0
+    for i in range(averages):
+        te_total += get_thin_etalon_dc(sock)
+        dpow_total += get_diode_power(sock)
+
+    dpow = dpow_total / averages
     if dpow <= 0:
         raise RuntimeError(f"No output power, cannot lock: DPOW:DC = {dpow}")
+    te = te_total / averages
     setpoint = te / dpow
+    logger.info(f"te: {te:.4f} dpow: {dpow:.4f} setpoint: {setpoint:.4f}")
 
     set_control_setpoint(sock, setpoint)
 
