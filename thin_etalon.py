@@ -24,7 +24,7 @@ def get_thin_etalon_max(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
 
     _thin_etalon_max = int(respond_splitted_list[-1])
@@ -37,7 +37,7 @@ def get_thin_etalon_position(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
     position = int(respond_splitted_list[-1])
     max_position = get_thin_etalon_max(sock)
@@ -51,7 +51,7 @@ def get_motor_status(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
     motor_status = int(respond_splitted_list[-1])
     return motor_status
@@ -62,7 +62,7 @@ def get_thin_etalon_dc(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
     thin_etalon_reflex = float(respond_splitted_list[-1])
     return thin_etalon_reflex
@@ -73,7 +73,7 @@ def get_diode_power(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
     total_power = float(respond_splitted_list[-1])
     return total_power

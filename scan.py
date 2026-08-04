@@ -14,8 +14,8 @@ def get_lower_limit(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
-    logger.debug(f"Raw response: {respond!r}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
     respond_splitted_list = respond.split()
     lower_limit = respond_splitted_list[-1]
 
@@ -30,9 +30,9 @@ def get_upper_limit(sock):
     mc.send_command(sock, command)
 
     respond = mc.receive_response(sock)
-    logger.debug(f"Raw response: {respond!r}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
 
     respond_splitted_list = respond.split()
     upper_limit = respond_splitted_list[-1]
@@ -49,7 +49,7 @@ def get_mode(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
     mode = respond_splitted_list[-1]
     mode_int = int(mode)
@@ -65,7 +65,7 @@ def get_device(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
     respond_splitted_list = respond.split()
     #0 = no device, 1 = slow cavity piezo, 2 = reference cell piezo
     scan_device_num = int(respond_splitted_list[-1])

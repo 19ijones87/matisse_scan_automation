@@ -13,8 +13,8 @@ def get_position(sock):
 
     respond = mc.receive_response(sock)
     if respond.startswith("!ERROR"):
-        raise RuntimeError(f"Matisse returned an error: {respond}")
-    logger.debug(f"Raw response: {respond!r}")
+        raise RuntimeError(f"{command} returned an error: {respond}")
+    logger.debug(f"Raw response to {command}: {respond!r}")
     respond_splitted_list = respond.split()
     position_value = respond_splitted_list[-1]
 
