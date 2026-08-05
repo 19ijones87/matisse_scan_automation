@@ -140,7 +140,7 @@ def step_to_next_window(sock, direction, flank, fraction, span, step):
 
     result["frequency_before"] = frequency_before
     result["frequency_after"] = frequency_after
-    result["step_ghz"] = step_ghz
+    result["lock_frequency"] = frequency_after
     return result
 
 
@@ -151,8 +151,8 @@ def acquire_locks(sock, flank, fraction, span, step):
 
     result = scan_and_lock(sock, flank, fraction, span, step, target="current")
 
-    result["frequency"] = wavemeter_client.get_frequency(WAVEMETER_CHANNEL)
-    logger.info(f"Locked at {result['frequency']} THz")
+    result["lock_frequency"] = wavemeter_client.get_frequency(WAVEMETER_CHANNEL)
+    logger.info(f"Locked at {result['lock_frequency']} THz")
     return result
 
 
