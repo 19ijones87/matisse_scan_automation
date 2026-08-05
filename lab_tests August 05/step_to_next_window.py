@@ -15,7 +15,7 @@ import matisse_client as mc
 import thin_etalon as te
 import piezo_etalon as pe
 import slow_piezo as sp
-import scan_device
+import scan
 import find_minima as fm
 import wavemeter_client
 import frequency_analysis as fa
@@ -55,7 +55,7 @@ def scan_and_lock(sock, flank, fraction, span, step, target, direction=None):
     te.unlock_thin_etalon(sock)
     pe.unlock_piezo_etalon(sock)
 
-    lower_limit = scan_device.get_lower_limit(sock)
+    lower_limit = scan.get_lower_limit(sock)
     sp.set_position(sock, lower_limit)
     logger.info(f"Slow piezo set to the scan lower limit {lower_limit}")
 
