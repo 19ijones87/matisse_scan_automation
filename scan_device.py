@@ -7,6 +7,39 @@ SCAN_POSITION_MIN = 0.0
 SCAN_POSITION_MAX = 0.7
 VALID_SCAN_MODES = (1, 2, 4, 8, 16, 32, 64, 128)
 
+def start(sock):
+    command = "SCAN:STATUS RUN"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond != "OK":
+        raise RuntimeError("Expected 'OK' but got: {}".format(respond))
+    logger.info("Scan started")
+
+
+
+def stop(sock):
+    command = "SCAN:STATUS STOP"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    if respond != "OK":
+        raise RuntimeError("Expected 'OK' but got: {}".format(respond))
+    logger.info("Scan stopped")
+
+def get_status(sock):
+    command = "SCAN:STATUS?"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    logger.debug(f"Raw response: {respond!r}") #!!!
+    respond_splitted_list = respond.split()
+    status_value = respond_splitted_list[-1]
+
+    if status_value != "RUN" and status_value != "STOP":
+        raise RuntimeError(f"Expected 'RUN' or 'STOP' but got: {status_value}")
+    return status_value
+
 
 def get_lower_limit(sock):
     command = "SCAN:LLM?"
@@ -73,3 +106,17 @@ def get_device(sock):
     if scan_device_num < 0 or scan_device_num > 2:
         raise RuntimeError("Invalid device")
     return scan_device_num
+
+
+def set_device(sock, device):
+    if device < 0 or device > 2:
+        raise RuntimeError(f"Expected a device in [0, 2] but got: {device}")
+
+    
+    command = f"SCAN:DEV {device}"
+    mc.send_command(sock, command)
+
+    respond = mc.receive_response(sock)
+    logger.debug(f"Raw response to {command}: {respond!r}")
+    if respond != "OK":
+        raise RuntimeError(f"{command}: expected 'OK' but got: {respond}")
