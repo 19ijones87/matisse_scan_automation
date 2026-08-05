@@ -1,5 +1,5 @@
 """
-matisse_scan.py
+scan_current_window.py
 
 Runs a full scan cycle on the Sirah Matisse Ti:Sapphire laser via
 Matisse Commander, and reports the scan's frequency statistics to the
@@ -62,52 +62,23 @@ import labserver_client
 
 
 #!!!level=logging.DEBUG
-logging.basicConfig(level=logging.INFO, format="%(asctime)s, %(levelname)s, %(message)s", 
-                    handlers=[logging.StreamHandler(), logging.FileHandler("matisse_scan.log")])
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s", datefmt="%H:%M:%S", handlers=[logging.StreamHandler(),
+              logging.FileHandler("scan_current_window.log")])
 logger = logging.getLogger(__name__)
 
 
-def start_scan(sock):
-    command = "SCAN:STATUS RUN"
-    mc.send_command(sock, command)
+import scan_device as sd
 
-    respond = mc.receive_response(sock)
-    if respond != "OK":
-        raise RuntimeError("Expected 'OK' but got: {}".format(respond))
-    logger.info("Scan started successfully!")
-
-
-def stop_scan(sock):
-    command = "SCAN:STATUS STOP"
-    mc.send_command(sock, command)
-
-    respond = mc.receive_response(sock)
-    if respond != "OK":
-        raise RuntimeError("Expected 'OK' but got: {}".format(respond))
-    logger.info("Scan stopped successfully!")
-
-
-def get_status(sock):
-    command = "SCAN:STATUS?"
-    mc.send_command(sock, command)
-
-    respond = mc.receive_response(sock)
-    logger.debug(f"Raw response: {respond!r}") #!!!
-    respond_splitted_list = respond.split()
-    status_value = respond_splitted_list[-1]
-
-    if status_value != "RUN" and status_value != "STOP":
-        raise RuntimeError(f"Expected 'RUN' or 'STOP' but got: {status_value}")
-    return status_value
-
-def wait_until_done(sock, sock_labServer, image_id, image_limit):
+def wait_until_done(sock, sock_labServer, image_id, image_limit, image_timeout):
     frequencies = []
+    results = []
     error_count = 0
     start_time = time.time()
     image_counter = 0
+    last_change_time = time.time()
     try:
         while True:
-            current_status = get_status(sock)
+            current_status = sd.get_status(sock)
             if current_status == "STOP":
                 break
             f = wavemeter_client.get_frequency(7)
@@ -116,74 +87,54 @@ def wait_until_done(sock, sock_labServer, image_id, image_limit):
             else:
                 frequencies.append(f)
             current_image_id = image_id
-            image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies)
+            image_id, frequencies = check_image_change(sock_labServer, image_id, frequencies,results)
             if current_image_id != image_id:
                 image_counter += 1
+                last_change_time = time.time()
         
             if image_limit <= image_counter:
                 logger.info("Number of images reached!")
-                stop_scan(sock)
+                sd.stop(sock)
                 break
             time.sleep(0.1)
+            if time.time() - last_change_time > image_timeout:
+                sd.stop(sock)
+                raise RuntimeError(f"No new image ID for {image_timeout} s "
+                                   f"after image {image_id}")
     except KeyboardInterrupt:
         logger.info("Ctrl+C received, stopping scan...")
-        stop_scan(sock)
-    end_time = time.time()
-    duration = end_time - start_time
+        sd.stop(sock)
+        raise 
+    duration = time.time() - start_time
+    uploaded = [r for r in results if r["mean"] is not None]
+    total_readings = sum(r["reading_count"] for r in results)
 
-    logger.info("===========================================================================")
-    logger.info("SCAN SUMMARY")
-    logger.info(f"Scan completed in {duration:.1f}s")
-    logger.info(f"Collected {len(frequencies)} valid readings, {error_count} failed")
+    logger.info("--- window summary ---")
+    logger.info(f"duration            {duration:.1f} s")
+    logger.info(f"images processed    {len(results)}")
+    logger.info(f"uploaded            {len(uploaded)}")
+    logger.info(f"empty               {len(results) - len(uploaded)}")
+    if results:
+        logger.info(f"readings per image  {total_readings / len(results):.0f}")
+    if uploaded:
+        means = [r["mean"] for r in uploaded]
+        logger.info(f"frequency span      {(max(means) - min(means)) * 1e6:.1f} MHz")
+    logger.info(f"wavemeter failures  {error_count}")
 
-    if len(frequencies) > 0:
-        mean, span = wavemeter_client.calculate_statistics(frequencies)
-        logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
-        logger.info("===========================================================================")
-
-        return image_id, mean, span
-
-    logger.info("===========================================================================")
-
-    return image_id, None, None
+    empty_ids = [r["image_id"] for r in results if r["mean"] is None]
+    if empty_ids:
+        logger.warning(f"images with no readings  {empty_ids}")
+    return results
 def upload_results_to_labServer(sock, image_id, mean, span):
-    logger.info("--------------------------------------------------------------------")
-    logger.info(f"Image ID: {image_id}")
-
     mean_key = "TiSaMeanFreq" + str(image_id)
     span_key = "TiSaSpanFreq" + str(image_id)
 
-    labserver_client.upload_data(sock, mean_key, mean)
-    #labserver_client.upload_data(sock, span_key, span)
-    logger.info(f"Uploaded mean/span to LabServer under keys: {mean_key}, {span_key}")
-    logger.info(f"Mean frequency: {mean:.6f} THz, Span: {span:.6f} THz")
-    logger.info("--------------------------------------------------------------------")
-
-    
-def main(matisse_host, labserver_host, image_limit):
-    logger.info(f"Connecting to Matisse at {matisse_host}:{MATISSE_PORT}")
-    sock = mc.connect_to_matisse(matisse_host, MATISSE_PORT)
-    logger.info("Connection established")
-
-    sock_labServer = None
-    try:
-        sock_labServer = labserver_client.connect_to_labserver(LABSERVER_CLIENT_ID, labserver_host, LABSERVER_PORT)
-        labserver_client.send_wait_for_image_id(sock_labServer)
-        image_id = labserver_client.read_image_id(sock_labServer, timeout=None)
-
-        start_scan(sock)
-        image_id, mean, span = wait_until_done(sock, sock_labServer, image_id, image_limit)
-
-        if (mean is not None) and (span is not None):
-            upload_results_to_labServer(sock_labServer, image_id,mean, span)
-    
-    finally:
-        mc.disconnect_from_matisse(sock)
-        labserver_client.disconnect_from_labserver(sock_labServer)
-        logger.info(f"Disconnected from {matisse_host}")
+    labserver_client.upload_data(sock, mean_key, mean, span)
+    logger.debug(f"Uploaded {mean_key}, {span_key}")
 
 
-def check_image_change(sock_labserver, current_image_id, frequencies):
+
+def check_image_change(sock_labserver, current_image_id, frequencies, results):
     try:
         new_image_id = labserver_client.read_image_id(sock_labserver, timeout=0)
     except (TimeoutError, BlockingIOError):
@@ -196,10 +147,59 @@ def check_image_change(sock_labserver, current_image_id, frequencies):
         if len(frequencies) > 0:
             mean, span = wavemeter_client.calculate_statistics(frequencies)
             upload_results_to_labServer(sock_labserver, current_image_id, mean, span)
-            labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
-    return new_image_id, []
-        
+            logger.info(f"Image {current_image_id}  {mean:.6f} THz  "
+                        f"span {span * 1e6:.1f} MHz  {len(frequencies)} readings")
+        else:
+            mean, span = None, None
+            logger.warning(f"Image {current_image_id}  no readings, nothing uploaded")
+        results.append({"image_id": current_image_id, "mean": mean, "span": span, "reading_count": len(frequencies), "finished_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+        labserver_client.send_wait_for_image_id(sock_labserver)   # new wait op
+        return new_image_id, []
 
+
+def scan_current_window(sock, sock_labServer, image_count, image_timeout = 120.0):
+    labserver_client.send_wait_for_image_id(sock_labServer)
+    image_id = labserver_client.read_image_id(sock_labServer, timeout=None)
+
+    sd.start(sock)
+    first_id = image_id
+    waited_since = time.time()
+    while image_id == first_id:
+        image_id, _ = check_image_change(sock_labServer, image_id, [], [])
+        if image_id == first_id:
+            if time.time() - waited_since > image_timeout:
+                sd.stop(sock)
+                raise RuntimeError(f"No image ID change within {image_timeout} s, "
+                                   f"still on image {first_id}")
+            time.sleep(0.1)
+    logger.info(f"Skipped the in-progress image {first_id}, counting from {image_id}")
+
+    results = wait_until_done(sock, sock_labServer, image_id, image_count, image_timeout)
+
+    #if (mean is not None) and (span is not None):
+        #upload_results_to_labServer(sock_labServer, image_id, mean, span) that is to upload last image statistics which are not completed
+
+    return results
+
+
+def main(matisse_host, labserver_host, image_limit):
+    logger.info(f"Connecting to Matisse at {matisse_host}:{MATISSE_PORT}")
+    sock_matisse = mc.connect_to_matisse(matisse_host, MATISSE_PORT)
+    logger.info("Connection established")
+
+    sock_labServer = None
+    try:
+        sock_labServer = labserver_client.connect_to_labserver(LABSERVER_CLIENT_ID, labserver_host, LABSERVER_PORT)
+        results = scan_current_window(sock_matisse, sock_labServer, image_limit)
+
+    
+    finally:
+        mc.disconnect_from_matisse(sock_matisse)
+        labserver_client.disconnect_from_labserver(sock_labServer)
+        logger.info(f"Disconnected from {matisse_host}")
+
+    
+    
 if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser()
