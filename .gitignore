@@ -13,3 +13,10 @@ LabServerDef.py
 /test_locking_layers.py
 /plot_all.py
 /is_sirasi.md
+lab_tests*/
+piezo_return_test*/
+final_lab_checks/
+run_*.csv
+run_*.json
+*.csv
+*.json
