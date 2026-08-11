@@ -35,30 +35,35 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def scan_frequency_range(sock, sock_labserver, windows,window_count , image_count, direction, flank, fraction, span, step):
+def scan_frequency_range(sock, labserver_host, windows, window_count, image_count,
+                         direction, flank, fraction, span, step):
     start_time = time.time()
     sd.set_device(sock, SCAN_DEVICE_NONE)
     lock_result = stnw.acquire_locks(sock, flank, fraction, span, step)
     logger.info(f"Starting at {lock_result['lock_frequency']} THz, "
                 f"thin etalon motor {lock_result['motor_settled']}")
-    windows = []
     current_window = lock_result
 
     for window_index in range(window_count):
-            logger.info(f"===== window {window_index + 1} / {window_count} =====")
+        logger.info(f"===== window {window_index + 1} / {window_count} =====")
 
-            sd.set_device(sock, SCAN_DEVICE_SLOW_PIEZO)
+        sd.set_device(sock, SCAN_DEVICE_SLOW_PIEZO)
+        sock_labserver = labserver_client.connect_to_labserver(
+            LABSERVER_CLIENT_ID, labserver_host, LABSERVER_PORT)
+        try:
             results = scw.scan_current_window(sock, sock_labserver, image_count)
-            sd.set_device(sock, SCAN_DEVICE_NONE)
+        finally:
+            labserver_client.disconnect_from_labserver(sock_labserver)
+        sd.set_device(sock, SCAN_DEVICE_NONE)
 
+        windows.append({"window_index": window_index,
+                        "lock": current_window,
+                        "images": results})
 
-            windows.append({"window_index": window_index,
-                            "lock": current_window,
-                            "images": results})
+        if window_index < window_count - 1:
+            current_window = stnw.step_to_next_window(sock, direction, flank,
+                                                      fraction, span, step)
 
-            if window_index < window_count - 1:
-                current_window = stnw.step_to_next_window(sock, direction, flank, fraction, span, step)
-    
     duration = time.time() - start_time
 
     all_means = []
@@ -121,15 +126,13 @@ def main(matisse_host, labserver_host, window_count, image_count,
     logger.info(f"Connecting to Matisse at {matisse_host}:{MATISSE_PORT}")
     sock = mc.connect_to_matisse(matisse_host, MATISSE_PORT)
     logger.info("Connection established")
+    logger.info(f"LabServer at {labserver_host}:{LABSERVER_PORT}")
 
-    sock_labserver = None
     windows = []
     run_name = "run_" + time.strftime("%Y%m%d_%H%M%S")
 
     try:
-        sock_labserver = labserver_client.connect_to_labserver(
-            LABSERVER_CLIENT_ID, labserver_host, LABSERVER_PORT)
-        scan_frequency_range(sock, sock_labserver, windows, window_count,
+        scan_frequency_range(sock, labserver_host, windows, window_count,
                              image_count, direction, flank, fraction, span, step)
     except KeyboardInterrupt:
         logger.warning("Ctrl+C received, ending the run without reaching the number of images")
@@ -138,7 +141,6 @@ def main(matisse_host, labserver_host, window_count, image_count,
             write_csv(windows, run_name + ".csv")
             write_json(windows, run_name + ".json")
         mc.disconnect_from_matisse(sock)
-        labserver_client.disconnect_from_labserver(sock_labserver)
         logger.info(f"Disconnected from {matisse_host}")
 
 

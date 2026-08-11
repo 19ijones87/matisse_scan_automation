@@ -60,7 +60,6 @@ import logging
 import wavemeter_client
 import labserver_client
 
-
 #!!!level=logging.DEBUG
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s", datefmt="%H:%M:%S", handlers=[logging.StreamHandler(),
               logging.FileHandler("scan_current_window.log")])
@@ -68,6 +67,30 @@ logger = logging.getLogger(__name__)
 
 
 import scan_device as sd
+import slow_piezo as sp
+
+PIEZO_RETURN_TOLERANCE = 0.02
+PIEZO_RETURN_TIMEOUT = 15.0
+
+
+def wait_for_piezo_at_lower_limit(sock):
+    lower_limit = sd.get_lower_limit(sock)
+    start_time = time.time()
+
+    while True:
+        position = sp.get_position(sock)
+
+        if abs(position - lower_limit) <= PIEZO_RETURN_TOLERANCE:
+            logger.info(f"Slow piezo back at {position:.4f} after "
+                        f"{time.time() - start_time:.1f} s")
+            return position
+
+        if time.time() - start_time > PIEZO_RETURN_TIMEOUT:
+            logger.warning(f"Slow piezo did not return to {lower_limit} within "
+                           f"{PIEZO_RETURN_TIMEOUT} s, last position {position:.4f}")
+            return position
+
+        time.sleep(0.02)
 
 def wait_until_done(sock, sock_labServer, image_id, image_limit, image_timeout):
     frequencies = []
@@ -94,6 +117,7 @@ def wait_until_done(sock, sock_labServer, image_id, image_limit, image_timeout):
         
             if image_limit <= image_counter:
                 logger.info("Number of images reached!")
+                wait_for_piezo_at_lower_limit(sock)
                 sd.stop(sock)
                 break
             time.sleep(0.1)
@@ -126,11 +150,11 @@ def wait_until_done(sock, sock_labServer, image_id, image_limit, image_timeout):
         logger.warning(f"images with no readings  {empty_ids}")
     return results
 def upload_results_to_labServer(sock, image_id, mean, span):
-    mean_key = "TiSaMeanFreq" + str(image_id)
-    span_key = "TiSaSpanFreq" + str(image_id)
+    mean_key = "TiSaFreq" + str(image_id)
+    #span_key = "TiSaSpanFreq" + str(image_id)
 
     labserver_client.upload_data(sock, mean_key, mean, span)
-    logger.debug(f"Uploaded {mean_key}, {span_key}")
+    #logger.debug(f"Uploaded {mean_key}, {span_key}")
 
 
 

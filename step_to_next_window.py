@@ -44,7 +44,8 @@ def require_locks_running_status(sock):
                                f"thin etalon {thin}, piezo etalon {piezo}")
 
 
-def scan_and_lock(sock, flank, fraction, span, step, target, direction=None):
+def scan_and_lock(sock, flank, fraction, span, step, target, direction=None,
+                  previous_minimum=None):
     if target not in ("neighbour", "current"):
         raise ValueError("target must be 'neighbour' or 'current'")
     if target == "neighbour" and direction is None:
@@ -86,6 +87,16 @@ def scan_and_lock(sock, flank, fraction, span, step, target, direction=None):
     current_index = fm.current_minimum(positions, minima_indices,
                                        start_position)
 
+
+    if previous_minimum is not None:
+        drift = abs(positions[current_index] - previous_minimum)
+        if drift > period / 2:
+            raise WindowStepFailed(
+                f"the thin etalon drifted {drift:.0f} steps during the scan, "
+                f"more than half a fringe period ({period:.0f}). "
+                f"Current minimum {positions[current_index]}, "
+                f"previous {previous_minimum}")
+
     if target == "neighbour":
         chosen_index = fm.neighbour_minimum(minima_indices, current_index,
                                             direction)
@@ -114,19 +125,23 @@ def scan_and_lock(sock, flank, fraction, span, step, target, direction=None):
         "lock_position": lock_position,
         "motor_arrived": arrived,
         "motor_settled": settled,
+        "minimum": positions[chosen_index],
         "fringe_period": period,
         "minima": [positions[i] for i in minima_indices],
+        "samples": samples,
     }
 
 
-def step_to_next_window(sock, direction, flank, fraction, span, step):
+def step_to_next_window(sock, direction, flank, fraction, span, step,
+                        previous_minimum=None):
     require_locks_running_status(sock)
 
     frequency_before = wavemeter_client.get_frequency(WAVEMETER_CHANNEL)
     piezo_before = sp.get_position(sock)
 
     result = scan_and_lock(sock, flank, fraction, span, step,
-                           target="neighbour", direction=direction)
+                           target="neighbour", direction=direction,
+                           previous_minimum=previous_minimum)
 
     frequency_after = wavemeter_client.get_frequency(WAVEMETER_CHANNEL)
     piezo_after = sp.get_position(sock)
@@ -141,6 +156,7 @@ def step_to_next_window(sock, direction, flank, fraction, span, step):
     result["frequency_before"] = frequency_before
     result["frequency_after"] = frequency_after
     result["lock_frequency"] = frequency_after
+    result["step_ghz"] = step_ghz
     return result
 
 
